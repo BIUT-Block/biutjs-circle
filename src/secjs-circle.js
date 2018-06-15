@@ -6,7 +6,6 @@ class SECJSTimeCircle {
    * @param {string} timezone time zone to select a ntp server
    */
   constructor (timezone) {
-    this.timeFormat = 'Unix'
     this.localHostTime = 0
     this.serverTime = 0
     this.ntpTimeServerAddress = ''
@@ -135,7 +134,7 @@ class SECJSTimeCircle {
    * get the time different between local unix time and server unix time
    * save the timestamp of last group in attribute timeStampOfLastGroup
    */
-  initialCircle (callback) {
+  initialCircle () {
     this.timeStampOfLastGroup = this._getLocalHostTime()
   }
 
