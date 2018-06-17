@@ -138,7 +138,7 @@ class SECJSTimeCircle {
   async initialCircle (callback) {
     try {
       this.timeStampOfLastGroup = await this._asyncGetUTCTimeFromServer()
-      this.beginWorkTimeStamp = await this.timeStampOfLastGroup
+      this.beginWorkTimeStamp = this.timeStampOfLastGroup
       callback()
     } catch (err) {
       throw Error(`Can't sync time cause error ${err}`)
@@ -158,8 +158,8 @@ class SECJSTimeCircle {
   }
 
   getNextGroupBeginTimeDiff (currentUnixTime, callback) {
-    let periodeRedundance = (currentUnixTime - this.beginWorkTimeStamp) / (this.circleTimeOut * this.sumOfGroups) * 10
-    let timeDiff = (1 - periodeRedundance % this.circleTimeOut / 10) * this.circleTimeOut
+    let periodeRedundance = (currentUnixTime - this.beginWorkTimeStamp) % this.circleTimeOut
+    let timeDiff = this.circleTimeOut - periodeRedundance
 
     callback(timeDiff)
   }
