@@ -1,20 +1,26 @@
 const dgram = require('dgram')
+const ntpPort = 123
 
 class SECJSTimeCircle {
   /**
    * constructor of secjs time circle class
-   * @param {string} timezone time zone to select a ntp server
+   * @param {string} config.circleTimeOut time out of a circle
+   * @param {number} config.sumOfGroups sum of the group
+   * @param {string} config.timeServer the server's local; 'DE': German 'USA': USA 'ZH': China
+   * @param {number} config.ntpTryOut try out time for udp transport
    */
-  constructor (timezone) {
+  constructor (config) {
     this.localHostTime = 0
     this.serverTime = 0
     this.ntpTimeServerAddress = ''
-    this.circleTimeOut = 30 // the time out of one circle, every 30s need to be switched to next working group
+    this.ntpTryOut = config.ntpTryOut // how many times should retry to get unix time
+    this.circleTimeOut = config.circleTimeOut // the time out of one circle, every 30s need to be switched to next working group
     this.currentWorkingGroupNumber = 1
     this.timeStampOfLastGroup = 0 // the time stamp to get the last group
-    this.sumOfGroups = 10
+    this.sumOfGroups = config.sumOfGroups
+    this.beginWorkTimeStamp = 0 // the unix time stamp at genesis time
     this.timeDiff = 0 // the time difference between server unix time and local unix time
-    switch (timezone) {
+    switch (config.timeServer) {
       case 'USA':
         this.ntpTimeServerAddress = 'us.pool.ntp.org'
         break
@@ -43,7 +49,7 @@ class SECJSTimeCircle {
    * get unix time from time server
    * @return {Promise}
    */
-  _getUTCTimeFromServer () {
+  _asyncGetUTCTimeFromServer () {
     return new Promise((resolve, reject) => {
       let ntpClient = dgram.createSocket('udp4')
       let ntpData = Buffer.alloc(48)
@@ -55,7 +61,7 @@ class SECJSTimeCircle {
         }
       })
 
-      ntpClient.send(ntpData, 123, this.ntpTimeServerAddress, (err) => {
+      ntpClient.send(ntpData, ntpPort, this.ntpTimeServerAddress, (err) => {
         if (err) {
           ntpClient.close()
           reject(err)
@@ -83,50 +89,45 @@ class SECJSTimeCircle {
     })
   }
 
-  /**
-   * caculcate the time difference between server unix time and local unix time
-   * save the result to attribute timeDiff
-   */
-  // async _calcTimeDifference (callback) {
-  //   let serverTime = await this._getUTCTimeFromServer()
-  //   let localTime = this._getLocalHostTime()
-  //   let diffTime = serverTime - localTime
-  //   let currentUnixTime = this._getLocalHostTime()
-  //   let adjustedTime = currentUnixTime + this.timeDiff
-  //   this.timeStampOfLastGroup = adjustedTime
-  //   this.timeDiff = diffTime
-  //   this.currentWorkingGroupNumber = 1
-  //   callback(this.timeDiff, this.timeStampOfLastGroup, this.currentWorkingGroupNumber)
-  // }
-
   async getWorkingGroupNumber (callback) {
     let serverTime = 0
+    let tryOut = 0
     try {
-      serverTime = await this._getUTCTimeFromServer()
+      serverTime = await this._asyncGetUTCTimeFromServer()
     } catch (err) {
-      throw Error(err)
+      tryOut = tryOut + 1
+      if (tryOut === this.ntpTryOut) {
+        throw Error(err)
+      }
+      serverTime = await this._asyncGetUTCTimeFromServer()
     }
     let workingGroupNumber = this._calcNextWorkingGroupNumber(serverTime)
-    // let localTime = this._getLocalHostTime()
-    // let diffTime = serverTime - localTime
-    // let currentUnixTime = this._getLocalHostTime()
-    // let adjustedTime = currentUnixTime + this.timeDiff
-    // this.timeStampOfLastGroup = adjustedTime
-    // this.timeDiff = diffTime
-    // this.currentWorkingGroupNumber = 1
+
     callback(workingGroupNumber)
   }
 
-  // _calcTimeDifference (callback) {
-  //   let serverTime = this._getUTCTimeFromServer()
-  //   let localTime = this._getLocalHostTime()
-  //   let diffTime = serverTime - localTime
-  //   let currentUnixTime = this._getLocalHostTime()
-  //   let adjustedTime = currentUnixTime + this.timeDiff
-  //   this.timeStampOfLastGroup = adjustedTime
-  //   this.timeDiff = diffTime
-  //   //callback(this.timeDiff, this.timeStampOfLastGroup, this.currentWorkingGroupNumber)
-  // }
+  /**
+   * get the time difference
+   */
+  async refreshTimeDifference (callback) {
+    let localHostTime = this._getLocalHostTime()
+    let serverTime = 0
+    let tryOut = 0
+    try {
+      serverTime = await this._asyncGetUTCTimeFromServer()
+      this.timeDiff = localHostTime - serverTime
+      callback(this.timeDiff, undefined)
+    } catch (err) {
+      tryOut = tryOut + 1
+      if (tryOut === this.ntpTryOut) {
+        callback(serverTime, err)
+        throw Error(err)
+      }
+      serverTime = await this._asyncGetUTCTimeFromServer()
+      this.timeDiff = localHostTime - serverTime
+      callback(this.timeDiff, undefined)
+    }
+  }
 
   /**
    * initialize the circle
@@ -134,34 +135,15 @@ class SECJSTimeCircle {
    * get the time different between local unix time and server unix time
    * save the timestamp of last group in attribute timeStampOfLastGroup
    */
-  initialCircle () {
-    this.timeStampOfLastGroup = this._getLocalHostTime()
+  async initialCircle (callback) {
+    try {
+      this.timeStampOfLastGroup = await this._asyncGetUTCTimeFromServer()
+      this.beginWorkTimeStamp = await this.timeStampOfLastGroup
+      callback()
+    } catch (err) {
+      throw Error(`Can't sync time cause error ${err}`)
+    }
   }
-
-  /**
-   * get next group, which shoud working
-   * @param {unixTimeStamp} currentUnixTime
-   */
-  // getWorkingGroupNumber (currentUnixTime) {
-  //   let adjustedUnixTime = currentUnixTime + this.timeDiff
-  //   if (this.timeDiff || this.timeDiff < 0) {
-  //     throw new Error(`Don't have any time different information. Use function initialCircle().`)
-  //   }
-
-  //   if (adjustedUnixTime < this.timeStampOfLastGroup) {
-  //     throw new Error(`The time stamp is invalid.`)
-  //   }
-
-  //   let jumpToNextCircle = (adjustedUnixTime - this.timeStampOfLastGroup) / (this.circleTimeOut * 1000) + this.currentWorkingGroupNumber
-
-  //   if (jumpToNextCircle < this.sumOfGroups + 1) {
-  //     this.currentWorkingGroupNumber = jumpToNextCircle
-  //   } else {
-  //     this.currentWorkingGroupNumber = Math.ceil((jumpToNextCircle / 10))
-  //   }
-  //   this.timeStampOfLastGroup = adjustedUnixTime
-  //   return this.currentWorkingGroupNumber
-  // }
 
   _calcNextWorkingGroupNumber (currentUnixTime) {
     let jumpToNextCircle = (currentUnixTime - this.timeStampOfLastGroup) / this.circleTimeOut + this.currentWorkingGroupNumber
@@ -170,12 +152,23 @@ class SECJSTimeCircle {
       this.currentWorkingGroupNumber = Math.floor(jumpToNextCircle)
     } else {
       this.currentWorkingGroupNumber = Math.floor((jumpToNextCircle / 10))
-      if (this.currentWorkingGroupNumber > 10) {
-        this.currentWorkingGroupNumber = this.currentWorkingGroupNumber - 1
-      }
     }
     this.timeStampOfLastGroup = currentUnixTime
     return this.currentWorkingGroupNumber
+  }
+
+  getNextGroupBeginTimeDiff (currentUnixTime, callback) {
+    let periodeRedundance = (currentUnixTime - this.beginWorkTimeStamp) / (this.circleTimeOut * this.sumOfGroups) * 10
+    let timeDiff = (1 - periodeRedundance % this.circleTimeOut / 10) * this.circleTimeOut
+
+    callback(timeDiff)
+  }
+
+  getNextPeriodeBeginTimeDiff (currentUnixTime, callback) {
+    let periodeTime = this.circleTimeOut * this.sumOfGroups
+    let periodeRedundance = periodeTime - (currentUnixTime - this.beginWorkTimeStamp) % periodeTime
+
+    callback(periodeRedundance)
   }
 }
 
