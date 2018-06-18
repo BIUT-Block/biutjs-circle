@@ -20,6 +20,16 @@ Initialize the timestamp, when the first group begin to work. Save the time stam
 This API is a aync method to get the next group number after a while
 - `callback`: a callback function to get the caculated working group number
 
+#### `secjsCircle.refreshTimeDifference(callback)`
+This API is to refresh the time difference and save the time difference into a local file
+
+### `secjsCircle.getNextGroupBeginTimeDiff(currentUnixTime, callback)`
+This function used to get the time of next group begin to work
+
+### `secjsCircle.getNextPeriodeBeginTimeDiff(currentUnixTime, callback)`
+This function used to get the time of the next periode
+
+
 ### Usage
 To use the libary to get the next working group, you need to do following steps.
 1. Select the nearest ntp server
@@ -29,7 +39,9 @@ let secjsCircle = new SECjsCircle('de')
 ```
 2. Initialize the time stamp of the circle if the group at the first time begin to work
 ```js
-secjsCircle.initial()
+secjsCircle.initial(() => {
+    // do something
+})
 ```
 3. Get the next group number, which should begin to work
 ```js

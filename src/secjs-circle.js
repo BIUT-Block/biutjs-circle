@@ -1,4 +1,5 @@
 const dgram = require('dgram')
+const fs = require('fs')
 const ntpPort = 123
 
 class SECJSTimeCircle {
@@ -8,6 +9,8 @@ class SECJSTimeCircle {
    * @param {number} config.sumOfGroups sum of the group
    * @param {string} config.timeServer the server's local; 'DE': German 'USA': USA 'ZH': China
    * @param {number} config.ntpTryOut try out time for udp transport
+   * @param {string} config.filePath path to save the time difference
+   * @param {bool} config.isMiningdHost is the host a mining host
    */
   constructor (config) {
     this.localHostTime = 0
@@ -15,6 +18,8 @@ class SECJSTimeCircle {
     this.ntpTimeServerAddress = ''
     this.ntpTryOut = config.ntpTryOut // how many times should retry to get unix time
     this.circleTimeOut = config.circleTimeOut // the time out of one circle, every 30s need to be switched to next working group
+    this.filePath = config.filePath || '../timeDiff.txt'
+    this.isMiningdHost = config.isMiningdHost || true
     this.currentWorkingGroupNumber = 1
     this.timeStampOfLastGroup = 0 // the time stamp to get the last group
     this.sumOfGroups = config.sumOfGroups
@@ -116,6 +121,7 @@ class SECJSTimeCircle {
     try {
       serverTime = await this._asyncGetUTCTimeFromServer()
       this.timeDiff = localHostTime - serverTime
+      this._writeTimeDiffToFile()
       callback(this.timeDiff, undefined)
     } catch (err) {
       tryOut = tryOut + 1
@@ -125,6 +131,7 @@ class SECJSTimeCircle {
       }
       serverTime = await this._asyncGetUTCTimeFromServer()
       this.timeDiff = localHostTime - serverTime
+      this._writeTimeDiffToFile()
       callback(this.timeDiff, undefined)
     }
   }
@@ -141,7 +148,23 @@ class SECJSTimeCircle {
       this.beginWorkTimeStamp = this.timeStampOfLastGroup
       callback()
     } catch (err) {
-      throw Error(`Can't sync time cause error ${err}`)
+      if (fs.existsSync(this.filePath)) {
+        fs.readFile(this.filePath, (err, data) => {
+          if (err) {
+            throw new Error(`Can't get time difference from file.`)
+          }
+          this.timeDiff = data.toString
+          this.timeStampOfLastGroup = this._getLocalHostTime + this.timeDiff
+          this.beginWorkTimeStamp = this.timeStampOfLastGroup
+        })
+      } else {
+        if (this.isMiningdHost) {
+          throw new Error(`Can't get time difference from server.`)
+        } else {
+          this.timeStampOfLastGroup = this._getLocalHostTime()
+          this.beginWorkTimeStamp = this.timeStampOfLastGroup
+        }
+      }
     }
   }
 
@@ -157,6 +180,19 @@ class SECJSTimeCircle {
     return this.currentWorkingGroupNumber
   }
 
+  _writeTimeDiffToFile () {
+    fs.writeFile(this.filePath, this.timeDiff, (err) => {
+      if (err) {
+
+      }
+    })
+  }
+
+  /**
+   * get the time to next group begin to work
+   * @param {number} currentUnixTime
+   * @param {function} callback
+   */
   getNextGroupBeginTimeDiff (currentUnixTime, callback) {
     let periodeRedundance = (currentUnixTime - this.beginWorkTimeStamp) % this.circleTimeOut
     let timeDiff = this.circleTimeOut - periodeRedundance
@@ -164,6 +200,11 @@ class SECJSTimeCircle {
     callback(timeDiff)
   }
 
+  /**
+   * get the time to next periode begin
+   * @param {number} currentUnixTime
+   * @param {function} callback
+   */
   getNextPeriodeBeginTimeDiff (currentUnixTime, callback) {
     let periodeTime = this.circleTimeOut * this.sumOfGroups
     let periodeRedundance = periodeTime - (currentUnixTime - this.beginWorkTimeStamp) % periodeTime

@@ -3,7 +3,8 @@ const config = {
   circleTimeOut: 30,
   ntpTryOut: 0,
   timeServer: 'DE',
-  sumOfGroups: 10
+  sumOfGroups: 10,
+  isMiningHost: true
 }
 
 let circle = new SECjsCircle(config)
