@@ -18,7 +18,7 @@ class SECJSTimeCircle {
     this.ntpTimeServerAddress = ''
     this.ntpTryOut = config.ntpTryOut // how many times should retry to get unix time
     this.circleTimeOut = config.circleTimeOut // the time out of one circle, every 30s need to be switched to next working group
-    this.filePath = config.filePath || '../timeDiff.txt'
+    this.filePath = config.filePath || 'timeDiff.txt'
     this.isMiningdHost = config.isMiningdHost || true
     this.currentWorkingGroupNumber = 1
     this.timeStampOfLastGroup = 0 // the time stamp to get the last group

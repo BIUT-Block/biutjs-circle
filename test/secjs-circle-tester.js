@@ -16,8 +16,9 @@ describe('Circle', () => {
 
     it('Initial the time stamp of the last working group', () => {
       let circle = new SECJSCircle('DE')
-      circle.initialCircle()
-      assert.equal(circle.timeStampOfLastGroup, Math.round((new Date()).getTime() / 1000))
+      circle.initialCircle(() => {
+        assert.equal(circle.timeStampOfLastGroup, Math.round((new Date()).getTime() / 1000))
+      })
     })
   })
 })
