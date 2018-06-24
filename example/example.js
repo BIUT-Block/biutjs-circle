@@ -10,7 +10,7 @@ const config = {
 let circle = new SECjsCircle(config)
 let currentWorkingGroupNumberExample = 0
 
-circle.refreshTimeDifference((timeDiff, err) => {
+circle.SecjsUtil.refreshTimeDifference((err, timeDiff) => {
   if (err) {
     console.log(`Error to get server Time ${err}`)
   }
@@ -18,7 +18,7 @@ circle.refreshTimeDifference((timeDiff, err) => {
 })
 
 circle.initialCircle(() => {
-  circle.refreshTimeDifference((timeDiff, err) => {
+  circle.SecjsUtil.refreshTimeDifference((err, timeDiff) => {
     if (err) {
       throw new Error(`Error at refresh time difference between local and server time ${err}`)
     }

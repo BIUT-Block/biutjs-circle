@@ -1,6 +1,7 @@
-const dgram = require('dgram')
+// const dgram = require('dgram')
 const fs = require('fs')
-const ntpPort = 123
+const Secjsutil = require('@sec-block/secjs-util')
+// const ntpPort = 123
 
 class SECJSTimeCircle {
   /**
@@ -25,20 +26,9 @@ class SECJSTimeCircle {
     this.sumOfGroups = config.sumOfGroups
     this.beginWorkTimeStamp = 0 // the unix time stamp at genesis time
     this.timeDiff = 0 // the time difference between server unix time and local unix time
-    switch (config.timeServer) {
-      case 'USA':
-        this.ntpTimeServerAddress = 'us.pool.ntp.org'
-        break
-      case 'DE':
-        this.ntpTimeServerAddress = 'de.pool.ntp.org'
-        break
-      case 'ZH':
-        this.ntpTimeServerAddress = 'cn.pool.ntp.org'
-        break
-      default:
-        this.ntpTimeServerAddress = 'de.pool.ntp.org'
-        break
-    }
+    this.SecjsUtil = new Secjsutil({
+      timeServer: config.timeServer
+    })
   }
 
   /**
@@ -50,90 +40,21 @@ class SECJSTimeCircle {
     return this.localHostTime
   }
 
-  /**
-   * get unix time from time server
-   * @return {Promise}
-   */
-  _asyncGetUTCTimeFromServer () {
-    return new Promise((resolve, reject) => {
-      let ntpClient = dgram.createSocket('udp4')
-      let ntpData = Buffer.alloc(48)
-      ntpData[0] = 0x1B
-      ntpClient.on('error', (err) => {
-        if (err) {
-          ntpClient.close()
-          reject(err)
-        }
-      })
-
-      ntpClient.send(ntpData, ntpPort, this.ntpTimeServerAddress, (err) => {
-        if (err) {
-          ntpClient.close()
-          reject(err)
-        }
-      })
-
-      ntpClient.once('message', (msg) => {
-        let offsetTransmitTime = 40
-        let intpart = 0
-        let fractpart = 0
-        ntpClient.close()
-        // Get the seconds part
-        for (var i = 0; i <= 3; i++) {
-          intpart = 256 * intpart + msg[offsetTransmitTime + i]
-        }
-        // Get the seconds fraction
-        for (i = 4; i <= 7; i++) {
-          fractpart = 256 * fractpart + msg[offsetTransmitTime + i]
-        }
-        let milliseconds = (intpart * 1000 + (fractpart * 1000) / 0x100000000)
-        var date = new Date('Jan 01 1900 GMT')
-        date.setUTCMilliseconds(date.getUTCMilliseconds() + milliseconds)
-        resolve(parseInt(date.getTime() / 1000))
-      })
-    })
-  }
-
   async getWorkingGroupNumber (callback) {
     let serverTime = 0
     let tryOut = 0
     try {
-      serverTime = await this._asyncGetUTCTimeFromServer()
+      serverTime = await this.SecjsUtil.asyncGetUTCTimeFromServer()
     } catch (err) {
       tryOut = tryOut + 1
       if (tryOut === this.ntpTryOut) {
         throw Error(err)
       }
-      serverTime = await this._asyncGetUTCTimeFromServer()
+      serverTime = await this.SecjsUtil.asyncGetUTCTimeFromServer()
     }
     let workingGroupNumber = this._calcNextWorkingGroupNumber(serverTime)
 
     callback(workingGroupNumber)
-  }
-
-  /**
-   * get the time difference
-   */
-  async refreshTimeDifference (callback) {
-    let localHostTime = this._getLocalHostTime()
-    let serverTime = 0
-    let tryOut = 0
-    try {
-      serverTime = await this._asyncGetUTCTimeFromServer()
-      this.timeDiff = localHostTime - serverTime
-      this._writeTimeDiffToFile()
-      callback(this.timeDiff, undefined)
-    } catch (err) {
-      tryOut = tryOut + 1
-      if (tryOut === this.ntpTryOut) {
-        callback(serverTime, err)
-        throw Error(err)
-      }
-      serverTime = await this._asyncGetUTCTimeFromServer()
-      this.timeDiff = localHostTime - serverTime
-      this._writeTimeDiffToFile()
-      callback(this.timeDiff, undefined)
-    }
   }
 
   /**
@@ -144,7 +65,7 @@ class SECJSTimeCircle {
    */
   async initialCircle (callback) {
     try {
-      this.timeStampOfLastGroup = await this._asyncGetUTCTimeFromServer()
+      this.timeStampOfLastGroup = await this.SecjsUtil.asyncGetUTCTimeFromServer()
       this.beginWorkTimeStamp = this.timeStampOfLastGroup
       callback()
     } catch (err) {
@@ -154,14 +75,14 @@ class SECJSTimeCircle {
             throw new Error(`Can't get time difference from file.`)
           }
           this.timeDiff = data.toString
-          this.timeStampOfLastGroup = this._getLocalHostTime + this.timeDiff
+          this.timeStampOfLastGroup = this.SecjsUtil.currentUnixTimeSecond() + this.timeDiff
           this.beginWorkTimeStamp = this.timeStampOfLastGroup
         })
       } else {
         if (this.isMiningdHost) {
           throw new Error(`Can't get time difference from server.`)
         } else {
-          this.timeStampOfLastGroup = this._getLocalHostTime()
+          this.timeStampOfLastGroup = this.SecjsUtil.currentUnixTimeSecond()
           this.beginWorkTimeStamp = this.timeStampOfLastGroup
         }
       }
@@ -170,7 +91,7 @@ class SECJSTimeCircle {
 
   _calcNextWorkingGroupNumber (currentUnixTime) {
     let jumpToNextCircle = (currentUnixTime - this.timeStampOfLastGroup) / this.circleTimeOut + this.currentWorkingGroupNumber
-    console.log(`Jump to next group ${jumpToNextCircle}`)
+    // console.log(`Jump to next group ${jumpToNextCircle}`)
     if (jumpToNextCircle < this.sumOfGroups + 1) {
       this.currentWorkingGroupNumber = Math.floor(jumpToNextCircle)
     } else {
@@ -178,14 +99,6 @@ class SECJSTimeCircle {
     }
     this.timeStampOfLastGroup = currentUnixTime
     return this.currentWorkingGroupNumber
-  }
-
-  _writeTimeDiffToFile () {
-    fs.writeFile(this.filePath, this.timeDiff, (err) => {
-      if (err) {
-
-      }
-    })
   }
 
   /**
