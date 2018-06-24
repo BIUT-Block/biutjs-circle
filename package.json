@@ -1,0 +1,36 @@
+{
+  "name": "@sec-block/secjs-circle",
+  "version": "1.0.1",
+  "description": "This libary used to sync the local time and ntp server time and caculate the working group number",
+  "main": "index.js",
+  "directories": {
+    "example": "example",
+    "test": "test"
+  },
+  "dependencies": {
+    "@sec-block/secjs-util": "^1.0.6",
+    "chai": "^4.1.2",
+    "dgram": "^1.0.1"
+  },
+  "devDependencies": {
+    "mocha": "^5.2.0"
+  },
+  "scripts": {
+    "test": "mocha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SEC-circle/secjs-circle.git"
+  },
+  "keywords": [
+    "secjs",
+    "sec-block",
+    "secjs-circle"
+  ],
+  "author": "MongoX",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/SEC-circle/secjs-circle/issues"
+  },
+  "homepage": "https://github.com/SEC-circle/secjs-circlek#README"
+}
