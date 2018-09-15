@@ -1,6 +1,6 @@
 {
   "name": "@sec-block/secjs-circle",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "This libary used to sync the local time and ntp server time and caculate the working group number",
   "main": "index.js",
   "directories": {
